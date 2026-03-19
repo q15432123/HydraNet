@@ -14,8 +14,8 @@ logger = logging.getLogger("hydranet.api")
 
 app = FastAPI(
     title="HydraNet API",
-    description="Self-Evolving Multi-Agent Intelligence System",
-    version="0.1.0",
+    description="Multi-LLM Battle System — 3 AI enter, 1 AI leaves",
+    version="0.2.0",
 )
 
 # These get injected at startup from main.py
@@ -23,14 +23,18 @@ _coordinator = None
 _evaluator = None
 _generator = None
 _executor = None
+_arena = None
+_evolver = None
 
 
-def set_components(coordinator, evaluator, generator, executor):
-    global _coordinator, _evaluator, _generator, _executor
+def set_components(coordinator, evaluator, generator, executor, arena=None, evolver=None):
+    global _coordinator, _evaluator, _generator, _executor, _arena, _evolver
     _coordinator = coordinator
     _evaluator = evaluator
     _generator = generator
     _executor = executor
+    _arena = arena
+    _evolver = evolver
 
 
 # ─── Status ──────────────────────────────────────────
@@ -133,3 +137,46 @@ async def get_alerts():
     if not _executor:
         raise HTTPException(503, "System not initialized")
     return _executor.get_alerts()
+
+
+# ─── Battle Arena ───────────────────────────────────
+
+class BattleRequest(BaseModel):
+    prompt: str
+    evolve: bool = True
+
+
+@app.post("/battle")
+async def start_battle(req: BattleRequest):
+    if not _arena:
+        raise HTTPException(503, "Battle arena not initialized")
+    result = await _arena.battle(req.prompt, evolve=req.evolve)
+    return result.to_dict()
+
+
+@app.get("/leaderboard")
+async def ai_leaderboard():
+    if not _arena:
+        raise HTTPException(503, "Battle arena not initialized")
+    return _arena.leaderboard
+
+
+@app.get("/history")
+async def battle_history():
+    if not _arena:
+        raise HTTPException(503, "Battle arena not initialized")
+    return _arena.history
+
+
+class EvolveRequest(BaseModel):
+    seed_prompt: str
+    task_description: str
+    rounds: int = 3
+
+
+@app.post("/evolve")
+async def evolve_prompt(req: EvolveRequest):
+    if not _evolver:
+        raise HTTPException(503, "Evolver not initialized")
+    result = await _evolver.evolve(req.seed_prompt, req.task_description, req.rounds)
+    return result

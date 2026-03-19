@@ -28,6 +28,8 @@ from agents.wallet_tracker import WalletTrackerAgent, create_wallet_tracker_dna
 from agents.cluster_analyzer import ClusterAnalyzerAgent, create_cluster_analyzer_dna
 from agents.pattern_detector import PatternDetectorAgent, create_pattern_detector_dna
 from agents.trade_advisor import TradeAdvisorAgent, create_trade_advisor_dna
+from battle.arena import BattleArena, Combatant
+from battle.prompt_evolver import PromptEvolver
 
 # ─── Logging ─────────────────────────────────────────
 
@@ -58,6 +60,26 @@ async def bootstrap():
     generator = AgentGenerator(coordinator)
     executor = ActionExecutor()
     metrics = MetricsCollector()
+
+    # Battle Arena
+    arena = BattleArena()
+    arena.add_combatant(Combatant(
+        name="GPT-4o", model="gpt-4o", provider="openai",
+        system_prompt="You are GPT-4o, a highly capable AI. Give precise, well-structured answers.",
+        temperature=0.7,
+    ))
+    arena.add_combatant(Combatant(
+        name="Claude", model="claude-sonnet", provider="anthropic",
+        system_prompt="You are Claude, an AI that values clarity and correctness. Think step by step.",
+        temperature=0.5,
+    ))
+    arena.add_combatant(Combatant(
+        name="Gemini", model="gemini-pro", provider="google",
+        system_prompt="You are Gemini, a creative AI. Explore unconventional approaches.",
+        temperature=0.9,
+    ))
+    evolver = PromptEvolver()
+    logger.info("Battle Arena initialized (3 combatants)")
 
     # Data pipeline
     pipeline = IngestionPipeline()
@@ -110,6 +132,8 @@ async def bootstrap():
         "pipeline": pipeline,
         "head_controller": head_controller,
         "metrics": metrics,
+        "arena": arena,
+        "evolver": evolver,
     }
 
 
@@ -124,6 +148,8 @@ async def run_server(components: dict):
         components["evaluator"],
         components["generator"],
         components["executor"],
+        components["arena"],
+        components["evolver"],
     )
 
     # Mount dashboard
@@ -177,12 +203,12 @@ async def main():
     # Run server
     api_task = asyncio.create_task(run_server(components))
 
-    logger.info("HydraNet is running")
+    logger.info("HydraNet is running — 3 AI enter, 1 AI leaves")
     logger.info("Dashboard:  http://localhost:8000")
+    logger.info("Battle:     POST http://localhost:8000/battle")
+    logger.info("Leaderboard: http://localhost:8000/leaderboard")
+    logger.info("Evolve:     POST http://localhost:8000/evolve")
     logger.info("API:        http://localhost:8000/status")
-    logger.info("Heads:      http://localhost:8000/heads")
-    logger.info("Metrics:    http://localhost:8000/metrics")
-    logger.info("Pipeline:   http://localhost:8000/pipeline/stats")
 
     try:
         await shutdown_event.wait()
