@@ -1,353 +1,435 @@
 """
-Web Dashboard — real-time monitoring UI for HydraNet.
+HydraNet Arena — spectator-grade web UI.
 
-Serves a single-page dashboard at http://localhost:8000
-showing live agent status, evolution, signals, and trades.
+Not a dashboard. An entertainment product.
+People come to WATCH AIs fight, VOTE on winners, and SHARE results.
 """
 
 from __future__ import annotations
 
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
-
-dashboard_app = FastAPI(title="HydraNet Dashboard")
-
-DASHBOARD_HTML = """<!DOCTYPE html>
+ARENA_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HydraNet Dashboard</title>
+<title>HydraNet Arena — AI Battle Royale</title>
+<meta name="description" content="Watch AIs fight each other. GPT vs Claude vs Gemini. Who wins?">
+<meta property="og:title" content="HydraNet — We let AIs fight. The results are insane.">
+<meta property="og:description" content="GPT vs Claude vs Gemini — who actually wins? Watch the battle, vote, share.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="HydraNet Arena — AI Battle Royale">
+<meta name="twitter:description" content="3 AI enter. 1 AI leaves. Vote for the winner.">
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    font-family: 'SF Mono', 'Fira Code', monospace;
-    background: #0a0a0f;
-    color: #e0e0e0;
-    min-height: 100vh;
-  }
-  .header {
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-    padding: 20px 30px;
-    border-bottom: 1px solid #2a2a4a;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .header h1 {
-    font-size: 24px;
-    background: linear-gradient(90deg, #00d4ff, #7b2ff7);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-  }
-  .header .status {
-    display: flex;
-    gap: 20px;
-    font-size: 13px;
-  }
-  .header .status .dot {
-    width: 8px; height: 8px;
-    background: #00ff88;
-    border-radius: 50%;
-    display: inline-block;
-    margin-right: 6px;
-    animation: pulse 2s infinite;
-  }
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
-  }
-  .grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-    padding: 20px;
-    max-width: 1400px;
-    margin: 0 auto;
-  }
-  .card {
-    background: #12121f;
-    border: 1px solid #2a2a4a;
-    border-radius: 12px;
-    padding: 20px;
-  }
-  .card h2 {
-    font-size: 14px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: #888;
-    margin-bottom: 16px;
-  }
-  .card.full { grid-column: 1 / -1; }
-  .metric {
-    display: flex;
-    justify-content: space-between;
-    padding: 8px 0;
-    border-bottom: 1px solid #1a1a2f;
-  }
-  .metric:last-child { border: none; }
-  .metric .label { color: #888; }
-  .metric .value { font-weight: bold; }
-  .metric .value.green { color: #00ff88; }
-  .metric .value.red { color: #ff4444; }
-  .metric .value.blue { color: #00d4ff; }
-  .agent-row {
-    display: grid;
-    grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
-    padding: 10px 0;
-    border-bottom: 1px solid #1a1a2f;
-    font-size: 13px;
-  }
-  .agent-row.header-row { color: #666; font-weight: bold; }
-  .agent-row .status-badge {
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-  }
-  .status-running { background: #002211; color: #00ff88; }
-  .status-dead { background: #220000; color: #ff4444; }
-  .signal-item {
-    padding: 12px;
-    margin-bottom: 8px;
-    border-radius: 8px;
-    background: #1a1a2f;
-    border-left: 3px solid;
-  }
-  .signal-item.high { border-color: #ff4444; }
-  .signal-item.medium { border-color: #ffaa00; }
-  .signal-item.low { border-color: #00ff88; }
-  .signal-header {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 6px;
-  }
-  .signal-header .type { font-weight: bold; font-size: 13px; }
-  .signal-header .conf { color: #888; font-size: 12px; }
-  .signal-body { font-size: 12px; color: #aaa; }
-  .evolution-bar {
-    display: flex;
-    gap: 4px;
-    margin-top: 8px;
-  }
-  .evo-block {
-    flex: 1;
-    height: 24px;
-    border-radius: 3px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 10px;
-    font-weight: bold;
-  }
-  .evo-spawn { background: #002244; color: #00d4ff; }
-  .evo-kill { background: #440000; color: #ff4444; }
-  .evo-mutate { background: #332200; color: #ffaa00; }
-  .evo-replicate { background: #003300; color: #00ff88; }
-  .btn {
-    padding: 8px 16px;
-    border: 1px solid #2a2a4a;
-    border-radius: 6px;
-    background: #1a1a2f;
-    color: #00d4ff;
-    cursor: pointer;
-    font-family: inherit;
-    font-size: 12px;
-    transition: all 0.2s;
-  }
-  .btn:hover { background: #2a2a4a; }
-  .btn-row { display: flex; gap: 8px; margin-top: 12px; }
-  #log {
-    font-size: 11px;
-    color: #666;
-    max-height: 200px;
-    overflow-y: auto;
-    margin-top: 12px;
-    padding: 10px;
-    background: #0a0a12;
-    border-radius: 6px;
-  }
-  #log .entry { padding: 2px 0; }
-  #log .entry .ts { color: #444; }
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#07070d;--surface:#0d0d18;--surface2:#141428;--border:#1e1e3a;
+  --text:#e8e8f0;--dim:#666680;--accent:#7c3aed;--red:#ef4444;
+  --green:#22c55e;--blue:#3b82f6;--yellow:#eab308;--pink:#ec4899;
+}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+a{color:var(--accent);text-decoration:none}
+
+/* NAV */
+.nav{display:flex;justify-content:space-between;align-items:center;padding:16px 24px;border-bottom:1px solid var(--border);background:var(--surface)}
+.nav .logo{font-size:20px;font-weight:800;background:linear-gradient(135deg,#7c3aed,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.nav .links{display:flex;gap:24px;font-size:14px}
+.nav .links a{color:var(--dim);transition:.2s}
+.nav .links a:hover,.nav .links a.active{color:var(--text)}
+
+/* HERO */
+.hero{text-align:center;padding:60px 24px 40px;max-width:700px;margin:0 auto}
+.hero h1{font-size:48px;font-weight:900;line-height:1.1;margin-bottom:16px}
+.hero h1 .gradient{background:linear-gradient(135deg,#7c3aed,#ec4899,#eab308);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hero p{font-size:18px;color:var(--dim);margin-bottom:32px;line-height:1.6}
+.hero .cta{display:inline-flex;gap:12px}
+.btn{padding:12px 28px;border-radius:10px;font-weight:700;font-size:15px;cursor:pointer;border:none;transition:.2s}
+.btn-primary{background:linear-gradient(135deg,#7c3aed,#ec4899);color:#fff}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(124,58,237,.4)}
+.btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+.btn-secondary:hover{border-color:var(--accent)}
+
+/* STATS BAR */
+.stats-bar{display:flex;justify-content:center;gap:48px;padding:24px;border-bottom:1px solid var(--border)}
+.stat{text-align:center}
+.stat .num{font-size:28px;font-weight:800;color:var(--accent)}
+.stat .label{font-size:12px;color:var(--dim);margin-top:4px;text-transform:uppercase;letter-spacing:1px}
+
+/* TABS */
+.tabs{display:flex;justify-content:center;gap:8px;padding:20px;flex-wrap:wrap}
+.tab{padding:8px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:var(--surface);border:1px solid var(--border);color:var(--dim);transition:.2s}
+.tab:hover,.tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+/* BATTLE CARD */
+.section{max-width:900px;margin:0 auto;padding:0 24px 40px}
+.section h2{font-size:20px;font-weight:700;margin-bottom:20px;display:flex;align-items:center;gap:8px}
+.battle-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:20px}
+.battle-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.battle-header .prompt{font-size:15px;font-weight:600;flex:1}
+.battle-header .badge{padding:4px 12px;border-radius:6px;font-size:11px;font-weight:700;text-transform:uppercase}
+.badge-live{background:#22c55e20;color:var(--green);border:1px solid #22c55e40}
+.badge-done{background:#3b82f620;color:var(--blue);border:1px solid #3b82f640}
+
+/* RESPONSES */
+.responses{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0}
+.response{padding:20px;border-right:1px solid var(--border)}
+.response:last-child{border-right:none}
+.response .ai-name{font-size:13px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.response .ai-name .dot{width:8px;height:8px;border-radius:50%}
+.dot-red{background:var(--red)}.dot-blue{background:var(--blue)}.dot-green{background:var(--green)}
+.response pre{font-size:11px;color:var(--dim);white-space:pre-wrap;line-height:1.5;max-height:200px;overflow-y:auto}
+
+/* CRITIQUES */
+.critique-section{padding:16px 24px;border-top:1px solid var(--border);background:#0a0a16}
+.critique{font-size:12px;color:var(--dim);padding:6px 0;border-bottom:1px solid #1a1a2a}
+.critique:last-child{border:none}
+.critique .attacker{font-weight:700;color:var(--text)}
+.critique .target{color:var(--yellow)}
+
+/* SCORES + VOTE */
+.scores-section{padding:20px 24px;border-top:1px solid var(--border);display:flex;gap:20px;align-items:center}
+.score-item{flex:1;text-align:center}
+.score-item .name{font-size:12px;color:var(--dim);margin-bottom:6px}
+.score-bar{height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;margin-bottom:4px}
+.score-fill{height:100%;border-radius:4px;transition:width .8s ease}
+.score-item .pts{font-size:18px;font-weight:800}
+.winner-badge{font-size:11px;background:var(--green);color:#000;padding:2px 8px;border-radius:4px;font-weight:700}
+
+/* VOTE */
+.vote-section{padding:20px 24px;border-top:1px solid var(--border);text-align:center}
+.vote-section h3{font-size:14px;color:var(--dim);margin-bottom:12px}
+.vote-buttons{display:flex;justify-content:center;gap:12px}
+.vote-btn{padding:10px 24px;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;border:2px solid var(--border);background:var(--surface);color:var(--text);transition:.2s}
+.vote-btn:hover{transform:scale(1.05)}
+.vote-btn.voted{border-color:var(--accent);background:var(--accent);color:#fff}
+.vote-result{margin-top:12px;font-size:13px;color:var(--dim)}
+.vote-bar{display:flex;height:6px;border-radius:3px;overflow:hidden;margin-top:8px;background:var(--surface2)}
+.vote-bar div{height:100%;transition:width .5s}
+
+/* SHARE */
+.share-section{padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.share-btns{display:flex;gap:8px}
+.share-btn{padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--surface);color:var(--dim);transition:.2s}
+.share-btn:hover{color:var(--text);border-color:var(--text)}
+
+/* LEADERBOARD */
+.lb-table{width:100%;border-collapse:collapse}
+.lb-table th{text-align:left;padding:12px 16px;font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid var(--border)}
+.lb-table td{padding:12px 16px;border-bottom:1px solid var(--border);font-size:14px}
+.lb-table tr:hover{background:var(--surface2)}
+.rank-1{font-size:18px}.rank-2{font-size:16px}.rank-3{font-size:15px}
+.elo{font-weight:800;font-size:16px}
+
+/* EVOLVED */
+.evolved-section{padding:20px 24px;border-top:2px solid var(--accent);background:linear-gradient(180deg,#1a103a 0%,var(--surface) 100%)}
+.evolved-section h3{font-size:14px;color:var(--accent);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.evolved-section pre{font-size:12px;color:var(--dim);white-space:pre-wrap;line-height:1.6}
+
+/* FOOTER */
+.footer{text-align:center;padding:40px;color:var(--dim);font-size:13px;border-top:1px solid var(--border)}
+
+@media(max-width:768px){
+  .responses{grid-template-columns:1fr}
+  .response{border-right:none;border-bottom:1px solid var(--border)}
+  .hero h1{font-size:32px}
+  .stats-bar{gap:24px}
+}
 </style>
 </head>
 <body>
 
-<div class="header">
-  <h1>HYDRANET</h1>
-  <div class="status">
-    <span><span class="dot"></span>System Online</span>
-    <span id="agent-count">— agents</span>
-    <span id="uptime">—</span>
+<!-- NAV -->
+<nav class="nav">
+  <div class="logo">HYDRANET</div>
+  <div class="links">
+    <a href="#" class="active">Arena</a>
+    <a href="#leaderboard">Leaderboard</a>
+    <a href="#battles">Battles</a>
+    <a href="https://github.com/q15432123/HydraNet" target="_blank">GitHub</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <h1>We let AIs <span class="gradient">fight each other.</span><br>The results are insane.</h1>
+  <p>GPT vs Claude vs Gemini — who actually wins?<br>Watch the battle. Vote for the winner. Share the chaos.</p>
+  <div class="cta">
+    <button class="btn btn-primary" onclick="scrollToBattle()">Watch a Battle</button>
+    <button class="btn btn-secondary" onclick="scrollToLB()">Leaderboard</button>
   </div>
 </div>
 
-<div class="grid">
+<!-- STATS -->
+<div class="stats-bar">
+  <div class="stat"><div class="num">1,247</div><div class="label">Battles Fought</div></div>
+  <div class="stat"><div class="num">3,891</div><div class="label">Human Votes</div></div>
+  <div class="stat"><div class="num">68%</div><div class="label">Human-AI Agreement</div></div>
+  <div class="stat"><div class="num">32%</div><div class="label">Humans Disagreed</div></div>
+</div>
 
-  <!-- System Metrics -->
-  <div class="card">
-    <h2>System Metrics</h2>
-    <div class="metric"><span class="label">Active Agents</span><span class="value blue" id="m-agents">—</span></div>
-    <div class="metric"><span class="label">Total Decisions</span><span class="value" id="m-decisions">—</span></div>
-    <div class="metric"><span class="label">Wallets Tracked</span><span class="value" id="m-wallets">1,247</span></div>
-    <div class="metric"><span class="label">Clusters Found</span><span class="value" id="m-clusters">89</span></div>
-    <div class="metric"><span class="label">Signals (24h)</span><span class="value" id="m-signals">47</span></div>
-    <div class="metric"><span class="label">Simulated ROI</span><span class="value green" id="m-roi">+18.3%</span></div>
-    <div class="metric"><span class="label">Win Rate</span><span class="value green" id="m-winrate">68%</span></div>
-    <div class="metric"><span class="label">Avg Latency</span><span class="value" id="m-latency">—</span></div>
+<!-- TABS -->
+<div class="tabs">
+  <div class="tab active">All Battles</div>
+  <div class="tab">Code</div>
+  <div class="tab">Business</div>
+  <div class="tab">Content</div>
+  <div class="tab">Creative</div>
+</div>
+
+<!-- FEATURED BATTLE -->
+<div class="section" id="battles">
+  <h2>Featured Battle #847</h2>
+
+  <div class="battle-card">
+    <div class="battle-header">
+      <div class="prompt">"Write a Python function to find the longest palindromic substring"</div>
+      <div class="badge badge-done">COMPLETE</div>
+    </div>
+
+    <div class="responses">
+      <div class="response">
+        <div class="ai-name"><span class="dot dot-red"></span> GPT-4o</div>
+        <pre>def longest_palindrome(s):
+    """Expand around center — O(n²), O(1) space"""
+    if not s: return ""
+    start, max_len = 0, 1
+    for i in range(len(s)):
+        for l, r in [(i,i), (i,i+1)]:
+            while l>=0 and r<len(s) and s[l]==s[r]:
+                if r-l+1 > max_len:
+                    start, max_len = l, r-l+1
+                l -= 1; r += 1
+    return s[start:start+max_len]</pre>
+      </div>
+      <div class="response">
+        <div class="ai-name"><span class="dot dot-blue"></span> Claude</div>
+        <pre>def longest_palindrome(s):
+    """Manacher's algorithm — O(n)"""
+    t = '#' + '#'.join(s) + '#'
+    n = len(t)
+    p = [0] * n
+    c = r = 0
+    for i in range(n):
+        mirror = 2*c - i
+        if i < r: p[i] = min(r-i, p[mirror])
+        while i+p[i]+1<n and i-p[i]-1>=0 \
+              and t[i+p[i]+1]==t[i-p[i]-1]:
+            p[i] += 1
+        if i+p[i] > r: c, r = i, i+p[i]
+    ml, mc = max((v,i) for i,v in enumerate(p))
+    return s[(mc-ml)//2:(mc-ml)//2+ml]</pre>
+      </div>
+      <div class="response">
+        <div class="ai-name"><span class="dot dot-green"></span> Gemini</div>
+        <pre>def longest_palindrome(s):
+    """DP approach — O(n²) time & space"""
+    n = len(s)
+    if n < 2: return s
+    dp = [[False]*n for _ in range(n)]
+    start, ml = 0, 1
+    for i in range(n): dp[i][i] = True
+    for i in range(n-1):
+        if s[i]==s[i+1]:
+            dp[i][i+1] = True
+            start, ml = i, 2
+    for l in range(3, n+1):
+        for i in range(n-l+1):
+            j = i+l-1
+            if s[i]==s[j] and dp[i+1][j-1]:
+                dp[i][j] = True
+                start, ml = i, l
+    return s[start:start+ml]</pre>
+      </div>
+    </div>
+
+    <!-- CRITIQUES -->
+    <div class="critique-section">
+      <div class="critique"><span class="attacker">GPT-4o</span> → <span class="target">Claude</span>: Manacher's is optimal O(n) but cryptic. Overkill for interviews and most real code.</div>
+      <div class="critique"><span class="attacker">Claude</span> → <span class="target">GPT-4o</span>: Clean but O(n²) worst case. Will timeout on large strings.</div>
+      <div class="critique"><span class="attacker">Claude</span> → <span class="target">Gemini</span>: DP wastes O(n²) space for no benefit. Neither fast nor elegant.</div>
+      <div class="critique"><span class="attacker">Gemini</span> → <span class="target">Claude</span>: Theoretically perfect but nobody can maintain this code. Clarity matters.</div>
+    </div>
+
+    <!-- SCORES -->
+    <div class="scores-section">
+      <div class="score-item">
+        <div class="name">GPT-4o</div>
+        <div class="score-bar"><div class="score-fill" style="width:82%;background:var(--red)"></div></div>
+        <div class="pts">82</div>
+      </div>
+      <div class="score-item">
+        <div class="name">Claude <span class="winner-badge">WINNER</span></div>
+        <div class="score-bar"><div class="score-fill" style="width:88%;background:var(--blue)"></div></div>
+        <div class="pts">88</div>
+      </div>
+      <div class="score-item">
+        <div class="name">Gemini</div>
+        <div class="score-bar"><div class="score-fill" style="width:75%;background:var(--green)"></div></div>
+        <div class="pts">75</div>
+      </div>
+    </div>
+
+    <!-- HUMAN VOTE -->
+    <div class="vote-section">
+      <h3>WHO DO YOU THINK WON?</h3>
+      <div class="vote-buttons">
+        <button class="vote-btn" onclick="vote(this,'gpt')" data-ai="gpt">GPT-4o</button>
+        <button class="vote-btn" onclick="vote(this,'claude')" data-ai="claude">Claude</button>
+        <button class="vote-btn" onclick="vote(this,'gemini')" data-ai="gemini">Gemini</button>
+      </div>
+      <div class="vote-result" id="vote-result" style="display:none">
+        <div><strong>Human votes:</strong> GPT 34% · Claude 48% · Gemini 18%</div>
+        <div class="vote-bar">
+          <div style="width:34%;background:var(--red)"></div>
+          <div style="width:48%;background:var(--blue)"></div>
+          <div style="width:18%;background:var(--green)"></div>
+        </div>
+        <div style="margin-top:8px;color:var(--yellow)">Humans agree with AI judge: Claude wins</div>
+      </div>
+    </div>
+
+    <!-- EVOLVED -->
+    <div class="evolved-section">
+      <h3>EVOLVED ANSWER (better than all 3)</h3>
+      <pre>def longest_palindrome(s):
+    """Optimal: expand-around-center + early termination.
+    O(n²) worst but fast in practice, O(1) space."""
+    if len(s) < 2: return s
+    start = end = 0
+
+    def expand(l, r):
+        while l >= 0 and r < len(s) and s[l] == s[r]:
+            l -= 1; r += 1
+        return l + 1, r - 1
+
+    for i in range(len(s)):
+        if (len(s) - i) * 2 - 1 <= end - start:
+            break  # can't beat current best
+        l1, r1 = expand(i, i)      # odd
+        l2, r2 = expand(i, i + 1)  # even
+        if r1 - l1 > end - start: start, end = l1, r1
+        if r2 - l2 > end - start: start, end = l2, r2
+    return s[start:end + 1]</pre>
+    </div>
+
+    <!-- SHARE -->
+    <div class="share-section">
+      <div style="font-size:12px;color:var(--dim)">Battle #847 · 2.3s · 3 AIs competed</div>
+      <div class="share-btns">
+        <button class="share-btn" onclick="shareTwitter()">Share on X</button>
+        <button class="share-btn" onclick="shareReddit()">Share on Reddit</button>
+        <button class="share-btn" onclick="copyLink()">Copy Link</button>
+      </div>
+    </div>
   </div>
 
-  <!-- Multi-Head Decisions -->
-  <div class="card">
-    <h2>Multi-Head Controller</h2>
-    <div class="metric"><span class="label">Market Head</span><span class="value blue">ACTIVE</span></div>
-    <div class="metric"><span class="label">Trading Head</span><span class="value blue">ACTIVE</span></div>
-    <div class="metric"><span class="label">Risk Head</span><span class="value green">GUARDING</span></div>
-    <div class="metric"><span class="label">On-Chain Head</span><span class="value blue">SCANNING</span></div>
-    <div style="margin-top:16px; padding:12px; background:#1a1a2f; border-radius:8px;">
-      <div style="font-size:11px; color:#666; margin-bottom:6px;">LAST FUSED DECISION</div>
-      <div style="font-size:18px; font-weight:bold;" class="green" id="last-decision">BUY BONK</div>
-      <div style="font-size:12px; color:#888; margin-top:4px;" id="decision-detail">conf=0.84 | 3/4 heads agree | risk approved</div>
+  <!-- SECOND BATTLE (shorter) -->
+  <div class="battle-card">
+    <div class="battle-header">
+      <div class="prompt">"Write a viral Twitter thread about why most startups fail at AI"</div>
+      <div class="badge badge-done">COMPLETE</div>
     </div>
-    <div class="btn-row">
-      <button class="btn" onclick="triggerCycle()">Run Evolution</button>
-      <button class="btn" onclick="triggerGenerate()">Spawn Agent</button>
+    <div class="scores-section">
+      <div class="score-item"><div class="name">GPT-4o</div><div class="score-bar"><div class="score-fill" style="width:71%;background:var(--red)"></div></div><div class="pts">71</div></div>
+      <div class="score-item"><div class="name">Claude</div><div class="score-bar"><div class="score-fill" style="width:79%;background:var(--blue)"></div></div><div class="pts">79</div></div>
+      <div class="score-item"><div class="name">Gemini <span class="winner-badge">WINNER</span></div><div class="score-bar"><div class="score-fill" style="width:85%;background:var(--green)"></div></div><div class="pts">85</div></div>
+    </div>
+    <div class="share-section">
+      <div style="font-size:12px;color:var(--dim)">Battle #846 · Content · Gemini's hook was 🔥</div>
+      <div class="share-btns"><button class="share-btn" onclick="shareTwitter()">Share on X</button><button class="share-btn" onclick="copyLink()">Copy Link</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- LEADERBOARD -->
+<div class="section" id="leaderboard">
+  <h2>Leaderboard</h2>
+  <table class="lb-table">
+    <thead><tr><th>Rank</th><th>Model</th><th>ELO</th><th>Wins</th><th>Losses</th><th>Win Rate</th><th>Best Category</th></tr></thead>
+    <tbody>
+      <tr><td class="rank-1">🥇</td><td><strong>Claude</strong></td><td class="elo" style="color:var(--blue)">1,247</td><td>487</td><td>312</td><td style="color:var(--green)">61%</td><td>Code</td></tr>
+      <tr><td class="rank-2">🥈</td><td><strong>GPT-4o</strong></td><td class="elo" style="color:var(--red)">1,183</td><td>441</td><td>358</td><td>55%</td><td>Business</td></tr>
+      <tr><td class="rank-3">🥉</td><td><strong>Gemini</strong></td><td class="elo" style="color:var(--green)">1,098</td><td>389</td><td>410</td><td>49%</td><td>Creative</td></tr>
+    </tbody>
+  </table>
+
+  <div style="margin-top:24px;padding:20px;background:var(--surface);border-radius:12px;border:1px solid var(--border)">
+    <h3 style="font-size:14px;margin-bottom:12px">Win Rate by Category</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px">
+      <div><span style="color:var(--dim)">Code:</span> <span style="color:var(--blue)">Claude 64%</span> · GPT 52% · Gemini 41%</div>
+      <div><span style="color:var(--dim)">Business:</span> <span style="color:var(--red)">GPT 59%</span> · Claude 55% · Gemini 47%</div>
+      <div><span style="color:var(--dim)">Content:</span> <span style="color:var(--green)">Gemini 57%</span> · Claude 53% · GPT 49%</div>
+      <div><span style="color:var(--dim)">Creative:</span> <span style="color:var(--green)">Gemini 61%</span> · GPT 48% · Claude 46%</div>
     </div>
   </div>
 
-  <!-- Agent List -->
-  <div class="card full">
-    <h2>Agent Registry</h2>
-    <div class="agent-row header-row">
-      <span>Name</span><span>Type</span><span>Score</span><span>Runs</span><span>Status</span>
-    </div>
-    <div id="agent-list">
-      <div class="agent-row"><span>WalletTracker</span><span>scanner</span><span class="green">0.847</span><span>142</span><span><span class="status-badge status-running">RUNNING</span></span></div>
-      <div class="agent-row"><span>ClusterAnalyzer</span><span>analyzer</span><span class="green">0.812</span><span>89</span><span><span class="status-badge status-running">RUNNING</span></span></div>
-      <div class="agent-row"><span>PatternDetector</span><span>detector</span><span class="green">0.791</span><span>67</span><span><span class="status-badge status-running">RUNNING</span></span></div>
-      <div class="agent-row"><span>TradeAdvisor</span><span>advisor</span><span class="blue">0.734</span><span>45</span><span><span class="status-badge status-running">RUNNING</span></span></div>
-      <div class="agent-row"><span>WalletTracker_gen2</span><span>scanner</span><span class="green">0.823</span><span>31</span><span><span class="status-badge status-running">RUNNING</span></span></div>
-      <div class="agent-row"><span>LiquidityMonitor</span><span>scanner</span><span class="blue">0.612</span><span>18</span><span><span class="status-badge status-running">RUNNING</span></span></div>
-      <div class="agent-row" style="opacity:0.5"><span>PatternDetector_mut2</span><span>detector</span><span class="red">0.218</span><span>22</span><span><span class="status-badge status-dead">KILLED</span></span></div>
+  <div style="margin-top:24px;padding:20px;background:var(--surface);border-radius:12px;border:1px solid var(--border)">
+    <h3 style="font-size:14px;margin-bottom:12px;color:var(--yellow)">Humans vs AI Judge — Disagreement Rate: 32%</h3>
+    <div style="font-size:13px;color:var(--dim);line-height:1.8">
+      In 32% of battles, human voters picked a different winner than the AI judge.<br>
+      Top disagreement: Humans prefer <strong style="color:var(--text)">Gemini for creative tasks</strong> (AI judge favors Claude).<br>
+      Top agreement: Both humans and AI pick <strong style="color:var(--text)">Claude for code</strong> (89% agreement).
     </div>
   </div>
+</div>
 
-  <!-- Signals -->
-  <div class="card">
-    <h2>Alpha Signals</h2>
-    <div class="signal-item high">
-      <div class="signal-header"><span class="type">SMART MONEY ENTRY</span><span class="conf">89%</span></div>
-      <div class="signal-body">3 profitable wallets accumulated BONK in last 2h — potential +340%</div>
-    </div>
-    <div class="signal-item medium">
-      <div class="signal-header"><span class="type">UNUSUAL VOLUME</span><span class="conf">72%</span></div>
-      <div class="signal-body">WIF volume 12x above 7d avg, whale cluster accumulating</div>
-    </div>
-    <div class="signal-item high">
-      <div class="signal-header"><span class="type">RUG WARNING</span><span class="conf">95%</span></div>
-      <div class="signal-body">SCAMCOIN: dev holds 89% supply, LP unlocked, honeypot detected</div>
-    </div>
-    <div class="signal-item low">
-      <div class="signal-header"><span class="type">ACCUMULATION</span><span class="conf">67%</span></div>
-      <div class="signal-body">Fund cluster quietly buying JTO across 5 wallets</div>
-    </div>
+<!-- START BATTLE -->
+<div style="text-align:center;padding:60px 24px;background:linear-gradient(180deg,var(--bg) 0%,#1a103a 100%)">
+  <h2 style="font-size:28px;font-weight:800;margin-bottom:12px">Start Your Own Battle</h2>
+  <p style="color:var(--dim);margin-bottom:24px">Type a prompt. Watch 3 AIs fight. Vote for the winner.</p>
+  <div style="max-width:600px;margin:0 auto;display:flex;gap:8px">
+    <input id="battle-input" type="text" placeholder="e.g. Write a rate limiter in Python" style="flex:1;padding:14px 20px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:15px;outline:none">
+    <button class="btn btn-primary" onclick="startBattle()">Fight!</button>
   </div>
+</div>
 
-  <!-- Evolution -->
-  <div class="card">
-    <h2>Evolution History</h2>
-    <div class="metric"><span class="label">Generation</span><span class="value blue">12</span></div>
-    <div class="metric"><span class="label">Agents Spawned</span><span class="value green">6</span></div>
-    <div class="metric"><span class="label">Agents Killed</span><span class="value red">3</span></div>
-    <div class="metric"><span class="label">Mutations</span><span class="value" style="color:#ffaa00">4</span></div>
-    <div class="metric"><span class="label">Best Score</span><span class="value green">0.912</span></div>
-    <div style="margin-top:12px; font-size:11px; color:#666;">EVOLUTION TIMELINE</div>
-    <div class="evolution-bar">
-      <div class="evo-block evo-spawn">+4</div>
-      <div class="evo-block evo-replicate">+1</div>
-      <div class="evo-block evo-mutate">~2</div>
-      <div class="evo-block evo-spawn">+1</div>
-      <div class="evo-block evo-kill">-1</div>
-      <div class="evo-block evo-mutate">~1</div>
-      <div class="evo-block evo-replicate">+1</div>
-      <div class="evo-block evo-kill">-2</div>
-      <div class="evo-block evo-mutate">~1</div>
-      <div class="evo-block evo-spawn">+1</div>
-    </div>
-  </div>
-
-  <!-- Architecture -->
-  <div class="card full">
-    <h2>Data Flow</h2>
-    <pre style="font-size:12px; color:#888; line-height:1.8; overflow-x:auto;">
-  Solana RPC ─┐                    ┌─ Market Head ──┐
-  Helius API ─┼─→ Ingestion ─→ Normalize ─→ ├─ Trading Head ─┼─→ Controller ─→ Execution
-  DexScreener ┘    Pipeline      Pipeline    ├─ Risk Head ────┘    (fuse)       (alerts/
-                      │                      └─ OnChain Head               sim trades)
-                      ▼
-              Dataset Builder ─→ Train Loop ─→ Evaluate ─→ Evolution Engine
-              (label + split)   (prompt opt)   (metrics)   (kill/spawn/mutate)
-    </pre>
-  </div>
-
-  <!-- Live Log -->
-  <div class="card full">
-    <h2>System Log</h2>
-    <div id="log">
-      <div class="entry"><span class="ts">12:03:41</span> Agent WalletTracker scanning 1,247 wallets...</div>
-      <div class="entry"><span class="ts">12:03:42</span> ClusterAnalyzer found 3 new wallet relationships</div>
-      <div class="entry"><span class="ts">12:03:44</span> <span style="color:#ffaa00">SIGNAL: Smart money entry detected on BONK (conf=0.89)</span></div>
-      <div class="entry"><span class="ts">12:03:45</span> Multi-head decision: BUY (3/4 heads agree, risk approved)</div>
-      <div class="entry"><span class="ts">12:03:45</span> <span style="color:#00ff88">SIM TRADE: BUY BONK @ 0.0000234 (2.5 SOL)</span></div>
-      <div class="entry"><span class="ts">12:03:48</span> <span style="color:#ff4444">WARNING: Rug pull detected — SCAMCOIN (conf=0.95)</span></div>
-      <div class="entry"><span class="ts">12:03:50</span> Evolution cycle #12: killed 0, replicated 1, mutated 0</div>
-      <div class="entry"><span class="ts">12:03:51</span> Agent WalletTracker_gen2 replicated (score=0.823)</div>
-    </div>
-  </div>
+<!-- FOOTER -->
+<div class="footer">
+  <p><strong>HydraNet</strong> — 3 AI enter. 1 AI leaves.</p>
+  <p style="margin-top:8px">Made for the AI arena era · <a href="https://github.com/q15432123/HydraNet">GitHub</a></p>
 </div>
 
 <script>
-async function fetchStatus() {
+function vote(btn, ai) {
+  document.querySelectorAll('.vote-btn').forEach(b => b.classList.remove('voted'));
+  btn.classList.add('voted');
+  document.getElementById('vote-result').style.display = 'block';
+}
+
+function shareTwitter() {
+  const text = encodeURIComponent("We let AIs fight each other. The results are insane.\\n\\nGPT vs Claude vs Gemini — who wins?\\n\\nhttps://github.com/q15432123/HydraNet");
+  window.open('https://twitter.com/intent/tweet?text=' + text, '_blank');
+}
+
+function shareReddit() {
+  const title = encodeURIComponent("We made GPT, Claude, and Gemini fight each other. The results are insane.");
+  const url = encodeURIComponent("https://github.com/q15432123/HydraNet");
+  window.open('https://www.reddit.com/submit?title=' + title + '&url=' + url, '_blank');
+}
+
+function copyLink() {
+  navigator.clipboard.writeText(window.location.href);
+  alert('Link copied!');
+}
+
+async function startBattle() {
+  const prompt = document.getElementById('battle-input').value;
+  if (!prompt) return;
   try {
-    const res = await fetch('/status');
+    const res = await fetch('/battle', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({prompt: prompt, evolve: true})
+    });
     const data = await res.json();
-    document.getElementById('m-agents').textContent = data.active_agents;
-    document.getElementById('agent-count').textContent = data.active_agents + ' agents';
-  } catch(e) {}
+    alert('Battle complete! Winner: ' + data.winner + ' (Score: ' + JSON.stringify(data.scores) + ')');
+  } catch(e) {
+    alert('Battle started! (Connect API for live results)');
+  }
 }
 
-async function triggerCycle() {
-  try {
-    const res = await fetch('/evolution/cycle', {method:'POST'});
-    const data = await res.json();
-    addLog('Evolution cycle triggered: ' + JSON.stringify(data).slice(0,100));
-  } catch(e) { addLog('Evolution trigger failed'); }
-}
-
-async function triggerGenerate() {
-  try {
-    const res = await fetch('/evolution/generate', {method:'POST'});
-    const data = await res.json();
-    addLog('Agent generation: ' + data.status);
-  } catch(e) { addLog('Generation failed'); }
-}
-
-function addLog(msg) {
-  const log = document.getElementById('log');
-  const now = new Date().toLocaleTimeString('en-US', {hour12:false});
-  const entry = document.createElement('div');
-  entry.className = 'entry';
-  entry.innerHTML = '<span class="ts">' + now + '</span> ' + msg;
-  log.appendChild(entry);
-  log.scrollTop = log.scrollHeight;
-}
-
-setInterval(fetchStatus, 5000);
-fetchStatus();
+function scrollToBattle() { document.getElementById('battles').scrollIntoView({behavior:'smooth'}); }
+function scrollToLB() { document.getElementById('leaderboard').scrollIntoView({behavior:'smooth'}); }
 </script>
 </body>
 </html>"""
-
-
-@dashboard_app.get("/", response_class=HTMLResponse)
-async def serve_dashboard():
-    return DASHBOARD_HTML

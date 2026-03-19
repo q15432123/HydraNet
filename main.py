@@ -140,7 +140,7 @@ async def bootstrap():
 async def run_server(components: dict):
     """Start the combined API + Dashboard server."""
     from api import app, set_components
-    from dashboard.app import DASHBOARD_HTML
+    from dashboard.app import ARENA_HTML
     from fastapi.responses import HTMLResponse
 
     set_components(
@@ -152,10 +152,10 @@ async def run_server(components: dict):
         components["evolver"],
     )
 
-    # Mount dashboard
+    # Mount arena UI
     @app.get("/", response_class=HTMLResponse)
-    async def dashboard():
-        return DASHBOARD_HTML
+    async def arena():
+        return ARENA_HTML
 
     # Head controller endpoints
     head_ctrl = components["head_controller"]
