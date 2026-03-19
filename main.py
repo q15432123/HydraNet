@@ -2,12 +2,12 @@
 HydraNet — Self-Evolving Multi-Agent Intelligence System
 
 Entry point: boots the coordinator, spawns initial agents,
-starts the evolution engine, and exposes the API.
+initializes the multi-head controller, starts evolution engine,
+and serves the dashboard + API.
 """
 
 import asyncio
 import logging
-import sys
 import signal
 import uvicorn
 
@@ -16,8 +16,14 @@ from core.coordinator import Coordinator
 from core.evaluator import EvolutionEngine
 from core.agent_generator import AgentGenerator
 from execution.action_executor import ActionExecutor
+from pipeline.ingestion import IngestionPipeline
+from pipeline.evaluation import MetricsCollector
+from heads.controller import HeadController
+from heads.market_head import MarketHead
+from heads.trading_head import TradingHead
+from heads.risk_head import RiskHead
+from heads.onchain_head import OnChainHead
 from database.db import init_database
-from agents.base import BaseAgent
 from agents.wallet_tracker import WalletTrackerAgent, create_wallet_tracker_dna
 from agents.cluster_analyzer import ClusterAnalyzerAgent, create_cluster_analyzer_dna
 from agents.pattern_detector import PatternDetectorAgent, create_pattern_detector_dna
@@ -44,13 +50,27 @@ async def bootstrap():
     # Database
     await init_database()
 
-    # Core
+    # Core systems
     coordinator = Coordinator()
     await coordinator.start()
 
     evaluator = EvolutionEngine(coordinator)
     generator = AgentGenerator(coordinator)
     executor = ActionExecutor()
+    metrics = MetricsCollector()
+
+    # Data pipeline
+    pipeline = IngestionPipeline()
+    await pipeline.start()
+    logger.info("Ingestion pipeline started")
+
+    # Multi-head controller
+    head_controller = HeadController()
+    head_controller.register_head(MarketHead(weight=1.0))
+    head_controller.register_head(TradingHead(weight=1.5))
+    head_controller.register_head(RiskHead(weight=2.0))
+    head_controller.register_head(OnChainHead(weight=1.2))
+    logger.info("Multi-head controller initialized (4 heads)")
 
     # Spawn initial agents
     agents_config = [
@@ -76,17 +96,61 @@ async def bootstrap():
 
     # Print status
     status = coordinator.get_system_status()
-    logger.info(f"System online: {status['active_agents']} agents active")
+    logger.info(f"System online: {status['active_agents']} agents + 4 heads active")
     for a in status["agents"]:
-        logger.info(f"  → {a['name']} ({a['type']}) [{a['status']}]")
+        logger.info(f"  Agent: {a['name']} ({a['type']}) [{a['status']}]")
+    for h in head_controller.get_head_stats():
+        logger.info(f"  Head:  {h['name']} (weight={h['weight']})")
 
-    return coordinator, evaluator, generator, executor
+    return {
+        "coordinator": coordinator,
+        "evaluator": evaluator,
+        "generator": generator,
+        "executor": executor,
+        "pipeline": pipeline,
+        "head_controller": head_controller,
+        "metrics": metrics,
+    }
 
 
-async def run_api(coordinator, evaluator, generator, executor):
-    """Start the FastAPI server."""
+async def run_server(components: dict):
+    """Start the combined API + Dashboard server."""
     from api import app, set_components
-    set_components(coordinator, evaluator, generator, executor)
+    from dashboard.app import DASHBOARD_HTML
+    from fastapi.responses import HTMLResponse
+
+    set_components(
+        components["coordinator"],
+        components["evaluator"],
+        components["generator"],
+        components["executor"],
+    )
+
+    # Mount dashboard
+    @app.get("/", response_class=HTMLResponse)
+    async def dashboard():
+        return DASHBOARD_HTML
+
+    # Head controller endpoints
+    head_ctrl = components["head_controller"]
+    pipeline = components["pipeline"]
+    metrics = components["metrics"]
+
+    @app.get("/heads")
+    async def get_heads():
+        return head_ctrl.get_head_stats()
+
+    @app.get("/heads/decisions")
+    async def get_head_decisions():
+        return head_ctrl.get_decision_history()
+
+    @app.get("/pipeline/stats")
+    async def get_pipeline_stats():
+        return pipeline.stats
+
+    @app.get("/metrics")
+    async def get_metrics():
+        return metrics.full_report()
 
     config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="info")
     server = uvicorn.Server(config)
@@ -94,7 +158,7 @@ async def run_api(coordinator, evaluator, generator, executor):
 
 
 async def main():
-    coordinator, evaluator, generator, executor = await bootstrap()
+    components = await bootstrap()
 
     # Handle shutdown
     loop = asyncio.get_event_loop()
@@ -108,14 +172,17 @@ async def main():
         try:
             loop.add_signal_handler(sig, _shutdown)
         except NotImplementedError:
-            # Windows doesn't support add_signal_handler
             pass
 
-    # Run API server
-    api_task = asyncio.create_task(run_api(coordinator, evaluator, generator, executor))
+    # Run server
+    api_task = asyncio.create_task(run_server(components))
 
-    logger.info("HydraNet is running. API at http://localhost:8000")
-    logger.info("Endpoints: /status, /agents, /evolution/leaderboard, /trades, /alerts")
+    logger.info("HydraNet is running")
+    logger.info("Dashboard:  http://localhost:8000")
+    logger.info("API:        http://localhost:8000/status")
+    logger.info("Heads:      http://localhost:8000/heads")
+    logger.info("Metrics:    http://localhost:8000/metrics")
+    logger.info("Pipeline:   http://localhost:8000/pipeline/stats")
 
     try:
         await shutdown_event.wait()
@@ -123,8 +190,9 @@ async def main():
         pass
     finally:
         logger.info("Shutting down...")
-        await evaluator.stop()
-        await coordinator.stop()
+        await components["evaluator"].stop()
+        await components["coordinator"].stop()
+        await components["pipeline"].stop()
         api_task.cancel()
         logger.info("HydraNet stopped.")
 
