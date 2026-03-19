@@ -151,12 +151,13 @@ a{color:var(--accent);text-decoration:none}
 
 <!-- HERO -->
 <div class="hero">
-  <h1>We let AIs <span class="gradient">fight each other.</span><br>The results are insane.</h1>
-  <p>GPT vs Claude vs Gemini — who actually wins?<br>Watch the battle. Vote for the winner. Share the chaos.</p>
+  <h1>3 AIs entered.<br><span class="gradient">Only 1 survived.</span></h1>
+  <p>We made AIs fight each other.<br>GPT vs Claude vs Gemini — who actually wins? You decide.</p>
   <div class="cta">
     <button class="btn btn-primary" onclick="scrollToBattle()">Watch a Battle</button>
     <button class="btn btn-secondary" onclick="scrollToLB()">Leaderboard</button>
   </div>
+  <p style="margin-top:20px;font-size:13px;color:var(--dim)">This is not an AI tool. This is an AI battleground.</p>
 </div>
 
 <!-- STATS -->
@@ -278,13 +279,16 @@ a{color:var(--accent);text-decoration:none}
         <button class="vote-btn" onclick="vote(this,'gemini')" data-ai="gemini">Gemini</button>
       </div>
       <div class="vote-result" id="vote-result" style="display:none">
-        <div><strong>Human votes:</strong> GPT 34% · Claude 48% · Gemini 18%</div>
+        <div><strong>Human votes:</strong> GPT 44% · Claude 31% · Gemini 25%</div>
         <div class="vote-bar">
-          <div style="width:34%;background:var(--red)"></div>
-          <div style="width:48%;background:var(--blue)"></div>
-          <div style="width:18%;background:var(--green)"></div>
+          <div style="width:44%;background:var(--red)"></div>
+          <div style="width:31%;background:var(--blue)"></div>
+          <div style="width:25%;background:var(--green)"></div>
         </div>
-        <div style="margin-top:8px;color:var(--yellow)">Humans agree with AI judge: Claude wins</div>
+        <div style="margin-top:12px;padding:12px;background:#ff444420;border:1px solid #ff444440;border-radius:8px;text-align:center">
+          <div style="font-size:20px;font-weight:900;color:var(--red)">AI WAS WRONG.</div>
+          <div style="font-size:13px;color:var(--dim);margin-top:4px">AI Judge picked Claude. Humans picked GPT.</div>
+        </div>
       </div>
     </div>
 
@@ -371,6 +375,38 @@ a{color:var(--accent);text-decoration:none}
       Top agreement: Both humans and AI pick <strong style="color:var(--text)">Claude for code</strong> (89% agreement).
     </div>
   </div>
+
+  <!-- EMBARRASSING LOSSES -->
+  <div style="margin-top:24px;padding:20px;background:var(--surface);border-radius:12px;border:1px solid var(--red)30">
+    <h3 style="font-size:14px;margin-bottom:16px;color:var(--red)">Most Embarrassing Losses</h3>
+    <div style="font-size:13px;line-height:2">
+      <div><span style="color:var(--red);font-weight:700">GPT-4o (31/100)</span> <span style="color:var(--dim)">Battle #412 — Hallucinated a Python library that doesn't exist</span></div>
+      <div><span style="color:var(--green);font-weight:700">Gemini (28/100)</span> <span style="color:var(--dim)">Battle #789 — Wrote code that infinite loops on empty input</span></div>
+      <div><span style="color:var(--blue);font-weight:700">Claude (35/100)</span> <span style="color:var(--dim)">Battle #1031 — Business analysis with completely made-up market data</span></div>
+    </div>
+    <div style="margin-top:12px;font-size:11px;color:var(--dim)">Even the best AIs have terrible days. That's why you need 3.</div>
+  </div>
+
+  <!-- VIRAL RESULT CARD -->
+  <div style="margin-top:24px;padding:24px;background:linear-gradient(135deg,#1a103a,#0d0d18);border-radius:16px;border:2px solid var(--accent);text-align:center">
+    <div style="font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:2px;margin-bottom:8px">VIRAL RESULT CARD</div>
+    <div style="font-size:24px;font-weight:900;margin-bottom:4px">Battle #847</div>
+    <div style="font-size:14px;color:var(--dim);margin-bottom:16px">"Write a startup idea for 2025"</div>
+    <div style="display:flex;justify-content:center;gap:24px;margin-bottom:16px">
+      <div><div style="font-size:11px;color:var(--dim)">LOSER</div><div style="font-size:20px;color:var(--red)">GPT-4o</div><div style="font-size:13px;color:var(--dim)">76</div></div>
+      <div><div style="font-size:11px;color:var(--green)">WINNER</div><div style="font-size:28px;font-weight:900;color:var(--blue)">Claude</div><div style="font-size:16px;font-weight:700">91</div></div>
+      <div><div style="font-size:11px;color:var(--dim)">LOSER</div><div style="font-size:20px;color:var(--green)">Gemini</div><div style="font-size:13px;color:var(--dim)">82</div></div>
+    </div>
+    <div style="padding:10px;background:#ff444420;border-radius:8px;margin-bottom:16px">
+      <span style="font-weight:900;color:var(--red)">AI WAS WRONG</span>
+      <span style="color:var(--dim);font-size:13px"> — Humans voted GPT</span>
+    </div>
+    <div style="display:flex;justify-content:center;gap:8px">
+      <button class="share-btn" onclick="shareTwitter()" style="font-size:13px">Share on X</button>
+      <button class="share-btn" onclick="shareReddit()" style="font-size:13px">Share on Reddit</button>
+      <button class="share-btn" onclick="copyLink()" style="font-size:13px">Copy Link</button>
+    </div>
+  </div>
 </div>
 
 <!-- START BATTLE -->
@@ -385,8 +421,9 @@ a{color:var(--accent);text-decoration:none}
 
 <!-- FOOTER -->
 <div class="footer">
-  <p><strong>HydraNet</strong> — 3 AI enter. 1 AI leaves.</p>
-  <p style="margin-top:8px">Made for the AI arena era · <a href="https://github.com/q15432123/HydraNet">GitHub</a></p>
+  <p style="font-size:16px;font-weight:800">3 AIs entered. Only 1 survived.</p>
+  <p style="margin-top:8px">This is not an AI tool. This is an AI battleground.</p>
+  <p style="margin-top:12px"><a href="https://github.com/q15432123/HydraNet">GitHub</a> · Pick a side.</p>
 </div>
 
 <script>
